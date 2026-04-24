@@ -1,0 +1,13 @@
+{
+  "name": "myproject",
+  "version": "0.1.0",
+  "dependencies": [
+    "boost-filesystem",
+    "boost-serialization",
+    "boost-iostreams",
+    "boost-math",
+    "boost-multiprecision",
+    "boost-graph",
+    "boost-asio"
+  ]
+}

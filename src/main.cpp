@@ -1,14 +1,19 @@
 #include <iostream>
-#include <boost/filesystem.hpp>
 
-int main() {
-    boost::filesystem::path p = boost::filesystem::current_path();
+#include "pinocchio/multibody/sample-models.hpp"
+#include "pinocchio/algorithm/joint-configuration.hpp"
+#include "pinocchio/algorithm/rnea.hpp"
 
-    std::cout << "current path: " << p << "\n";
+int main()
+{
+    pinocchio::Model model;
+    pinocchio::buildModels::manipulator(model);
+    pinocchio::Data data(model);
 
-    for (auto& entry : boost::filesystem::directory_iterator(p)) {
-        std::cout << entry.path().filename() << "\n";
-    }
+    Eigen::VectorXd q = pinocchio::neutral(model);
+    Eigen::VectorXd v = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd a = Eigen::VectorXd::Zero(model.nv);
 
-    return 0;
+    const Eigen::VectorXd & tau = pinocchio::rnea(model, data, q, v, a);
+    std::cout << "tau = " << tau.transpose() << std::endl;
 }

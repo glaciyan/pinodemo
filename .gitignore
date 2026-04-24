@@ -1,3 +1,6 @@
 lib/boost*
 cmake-build-*
 .idea
+build/
+vcpkg_installed/
+.claude/
