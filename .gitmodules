@@ -1,3 +1,6 @@
 [submodule "lib/eigen3"]
 	path = lib/eigen3
 	url = https://gitlab.com/libeigen/eigen
+[submodule "lib/pinocchio"]
+	path = lib/pinocchio
+	url = https://github.com/glaciyan/pinocchio.git
