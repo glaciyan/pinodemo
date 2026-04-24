@@ -90,6 +90,13 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+# MSVC treats C4716 ("must return a value") as an error even when __assume(0)
+# marks code as unreachable — suppress it for the pinocchio library only.
+if(TARGET pinocchio_default)
+  target_compile_options(pinocchio_default PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/wd4716>)
+endif()
+
 # ---------------------------------------------------------------
 # your executable
 # ---------------------------------------------------------------
