@@ -1,3 +1,3 @@
-lib/boost_1_91_0
+lib/boost*
 cmake-build-*
 .idea
