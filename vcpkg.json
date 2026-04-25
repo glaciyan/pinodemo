@@ -8,6 +8,8 @@
     "boost-math",
     "boost-multiprecision",
     "boost-graph",
-    "boost-asio"
+    "boost-asio",
+    "urdfdom",
+    "boost-logic"
   ]
 }

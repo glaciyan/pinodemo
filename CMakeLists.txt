@@ -12,9 +12,10 @@ if(SCCACHE)
 endif()
 
 # ---------------------------------------------------------------
-# static MSVC runtime (/MT instead of /MD) for all targets
+# dynamic MSVC runtime (/MD) — third-party libs are static via x64-windows-static-md,
+# only the MSVC redistributable DLLs are required at runtime
 # ---------------------------------------------------------------
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "" FORCE)
 
 # sccache can't handle /Zi (shared PDB) with parallel builds; use /Z7 instead
 # so debug info goes into each .obj rather than a shared PDB file.
@@ -68,7 +69,7 @@ set(BUILD_TESTING             OFF CACHE BOOL "" FORCE)
 set(BUILD_BENCHMARK           OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES            OFF CACHE BOOL "" FORCE)
 set(BUILD_PYTHON_INTERFACE    OFF CACHE BOOL "" FORCE)
-set(BUILD_WITH_URDF_SUPPORT       OFF CACHE BOOL "" FORCE)
+set(BUILD_WITH_URDF_SUPPORT       ON  CACHE BOOL "" FORCE)
 set(BUILD_WITH_COLLISION_SUPPORT  OFF CACHE BOOL "" FORCE)
 set(BUILD_WITH_CASADI_SUPPORT     OFF CACHE BOOL "" FORCE)
 set(BUILD_WITH_AUTODIFF_SUPPORT   OFF CACHE BOOL "" FORCE)
@@ -78,15 +79,27 @@ set(CMAKE_SKIP_INSTALL_RULES TRUE)
 add_subdirectory("${PINOCCHIO_ROOT}" EXCLUDE_FROM_ALL)
 set(CMAKE_SKIP_INSTALL_RULES FALSE)
 
-# When pinocchio is static, CMake does not auto-add pinocchio_EXPORTS.
-# We add it as PUBLIC on the concrete lib (propagates to consumers) and
-# INTERFACE on the INTERFACE umbrella target.
+# When pinocchio is static, CMake does not auto-define the _EXPORTS symbol for
+# each sub-library. Add them as PUBLIC so both the lib and its consumers use
+# dllexport rather than dllimport, avoiding __imp_ linker errors.
 if(NOT BUILD_SHARED_LIBS)
-  if(TARGET pinocchio_default)
-    target_compile_definitions(pinocchio_default PUBLIC pinocchio_EXPORTS)
-  endif()
+  foreach(_pinotgt pinocchio_default pinocchio_parsers pinocchio_visualizers
+                   pinocchio_extra pinocchio_collision)
+    if(TARGET ${_pinotgt})
+      string(REPLACE "pinocchio_" "" _suffix "${_pinotgt}")
+      if(_suffix STREQUAL "default")
+        set(_sym pinocchio_EXPORTS)
+      else()
+        set(_sym "${_pinotgt}_EXPORTS")
+      endif()
+      target_compile_definitions(${_pinotgt} PUBLIC ${_sym})
+    endif()
+  endforeach()
   if(TARGET pinocchio)
-    target_compile_definitions(pinocchio INTERFACE pinocchio_EXPORTS)
+    target_compile_definitions(pinocchio INTERFACE
+      pinocchio_EXPORTS
+      pinocchio_parsers_EXPORTS
+      pinocchio_visualizers_EXPORTS)
   endif()
 endif()
 
