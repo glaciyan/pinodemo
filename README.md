@@ -1,7 +1,7 @@
 # pinodemo
 
 Minimal C++ demo of [Pinocchio 4](https://github.com/stack-of-tasks/pinocchio) on Windows.
-Builds a manipulator model and runs the Recursive Newton-Euler Algorithm (RNEA).
+Loads a UR5 URDF and runs forward kinematics.
 
 ## Dependencies
 
@@ -9,10 +9,12 @@ Builds a manipulator model and runs the Recursive Newton-Euler Algorithm (RNEA).
 |------|-------|
 | CMake >= 3.22 | [cmake.org](https://cmake.org) |
 | Visual Studio 2022 | Desktop C++ workload required |
-| vcpkg | Boost is installed automatically via `vcpkg.json` manifest |
+| Ninja | Bundled with CLion or available standalone |
+| vcpkg | Dependencies installed automatically via `vcpkg.json` manifest |
 | sccache (optional) | Speeds up incremental builds; auto-detected if on `PATH` |
 
-Eigen3 is included as a git submodule. Boost is fetched by vcpkg automatically on first configure.
+Eigen3 and Pinocchio are included as git submodules.
+Boost, urdfdom, and supporting libraries are fetched by vcpkg automatically on first configure.
 
 ## Clone
 
@@ -34,26 +36,28 @@ Run from a **VS 2022 x64 Developer Command Prompt** (required for the MSVC compi
 ```bat
 cmake -B build -S . ^
   -G Ninja ^
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+  -DCMAKE_BUILD_TYPE=Debug ^
   -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake ^
-  -DVCPKG_TARGET_TRIPLET=x64-windows-static
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
 ```
 
 Replace `<path-to-vcpkg>` with your vcpkg root, e.g. `C:\Users\you\.vcpkg-clion\vcpkg`.
 
-vcpkg will automatically install all Boost dependencies listed in `vcpkg.json` on first configure.
+vcpkg will automatically install all dependencies listed in `vcpkg.json` on first configure.
 
 ### CLion
 
-Add the following to your CMake profile's **CMake options**:
+Use the `debug-vs` preset defined in `CMakePresets.json`, or configure manually:
 
-```
--DCMAKE_TOOLCHAIN_FILE=C:\Users\you\.vcpkg-clion\vcpkg\scripts\buildsystems\vcpkg.cmake
--DVCPKG_TARGET_TRIPLET=x64-windows-static
-```
+- Generator: `Ninja`
+- Build type: `Debug`
+- CMake options:
+  ```
+  -DCMAKE_TOOLCHAIN_FILE=C:\Users\you\.vcpkg-clion\vcpkg\scripts\buildsystems\vcpkg.cmake
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+  ```
 
-Set the build type to `RelWithDebInfo` and the generator to `Ninja`.
-Builds must be launched from a VS 2022 x64 developer shell (CLion handles this automatically when configured with a Visual Studio toolchain).
+CLion handles the VS 2022 toolchain environment automatically when configured with a Visual Studio toolchain.
 
 ## Build
 
@@ -67,28 +71,44 @@ cmake --build build --target MyProject -j 4
 build\MyProject.exe
 ```
 
-Expected output:
+Expected output (values vary — random configuration is sampled each run):
 
 ```
-tau = 0 0 0 0 0 0
+model name: ur5
+q:  -6.26746  0.799037  -1.92703   3.87975   1.06826 -0.252923
+universe                : 0.00 0.00 0.00
+shoulder_pan_joint      : 0.00 0.00 0.09
+shoulder_lift_joint     : -0.00 0.14  0.09
+elbow_joint             :  0.30  0.02 -0.22
+wrist_1_joint           :  0.46  0.02  0.14
+wrist_2_joint           :  0.46  0.12  0.14
+wrist_3_joint           :  0.43  0.12  0.23
 ```
 
-## Static linking
+## Linking strategy
 
-Everything is statically linked into `MyProject.exe`:
+| Library | How linked | Rationale |
+|---------|-----------|-----------|
+| Pinocchio | Shared (2 DLLs) | Avoids complex static export workarounds on MSVC |
+| urdfdom | Shared (4 DLLs) | vcpkg does not support static urdfdom on Windows |
+| Boost | Static | `x64-windows-static-md` triplet |
+| Eigen3 | Header-only | — |
+| MSVC CRT | Dynamic (`/MD`) | Required by `x64-windows-static-md` |
 
-- Boost libraries (`x64-windows-static` vcpkg triplet)
-- Pinocchio (`BUILD_SHARED_LIBS=OFF`)
-- MSVC runtime (`/MT`)
+The 6 DLLs (`pinocchio_default.dll`, `pinocchio_parsers.dll`, `urdfdom_model.dll`,
+`urdfdom_model_state.dll`, `urdfdom_world.dll`, `urdfdom_sensor.dll`) are automatically
+copied next to the executable at build time. No PATH configuration is needed to run.
 
-No DLLs are required at runtime.
+The MSVC runtime (`msvcp140.dll`, `vcruntime140.dll`) must be present on the target machine.
+Ship `vc_redist.x64.exe` alongside your installer if targeting machines without Visual Studio.
 
 ## Project layout
 
 ```
 CMakeLists.txt          build configuration
-vcpkg.json              Boost dependency manifest
-src/main.cpp            demo: RNEA on a 6-DOF manipulator
+CMakePresets.json       CLion / IDE presets
+vcpkg.json              vcpkg dependency manifest
+src/main.cpp            demo: load UR5 URDF, run forward kinematics
 lib/eigen3/             Eigen 3.4 (git submodule)
 lib/pinocchio/          Pinocchio 4.0 (git submodule)
 ```
