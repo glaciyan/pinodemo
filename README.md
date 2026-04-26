@@ -11,7 +11,6 @@ Loads a UR5 URDF and runs forward kinematics.
 | Visual Studio 2022 | Desktop C++ workload required |
 | Ninja | Bundled with CLion or available standalone |
 | vcpkg | Dependencies installed automatically via `vcpkg.json` manifest |
-| sccache (optional) | Speeds up incremental builds; auto-detected if on `PATH` |
 
 Eigen3 and Pinocchio are included as git submodules.
 Boost, urdfdom, and supporting libraries are fetched by vcpkg automatically on first configure.
