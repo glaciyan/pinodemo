@@ -40,9 +40,13 @@ set(EIGEN3_ROOT     "${CMAKE_SOURCE_DIR}/lib/eigen3")
 set(PINOCCHIO_ROOT  "${CMAKE_SOURCE_DIR}/lib/pinocchio")
 
 # ---------------------------------------------------------------
-# boost (via vcpkg - x64-windows-static triplet expected)
+# boost (via vcpkg - x64-windows-static-md triplet: static libs, dynamic CRT)
 # ---------------------------------------------------------------
 find_package(Boost REQUIRED COMPONENTS filesystem serialization iostreams)
+
+# urdfdom is always dynamic in vcpkg; find it here so its imported targets
+# (urdfdom::urdfdom_model etc.) are available for DLL staging below.
+find_package(urdfdom CONFIG REQUIRED)
 
 # ---------------------------------------------------------------
 # eigen - add_subdirectory generates Eigen3Config.cmake into the build tree
@@ -64,7 +68,7 @@ list(APPEND PROJECT_PACKAGES_IN_WORKSPACE Boost Eigen3)
 set(Boost_VERSION_STRING "${Boost_VERSION}")
 set(Boost_FOUND TRUE)
 
-set(BUILD_SHARED_LIBS         OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS         ON  CACHE BOOL "" FORCE)
 set(BUILD_TESTING             OFF CACHE BOOL "" FORCE)
 set(BUILD_BENCHMARK           OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES            OFF CACHE BOOL "" FORCE)
@@ -75,33 +79,11 @@ set(BUILD_WITH_CASADI_SUPPORT     OFF CACHE BOOL "" FORCE)
 set(BUILD_WITH_AUTODIFF_SUPPORT   OFF CACHE BOOL "" FORCE)
 set(BUILD_WITH_CODEGEN_SUPPORT    OFF CACHE BOOL "" FORCE)
 
+add_compile_definitions(_WIN32_WINNT=0x0A00)
+
 set(CMAKE_SKIP_INSTALL_RULES TRUE)
 add_subdirectory("${PINOCCHIO_ROOT}" EXCLUDE_FROM_ALL)
 set(CMAKE_SKIP_INSTALL_RULES FALSE)
-
-# When pinocchio is static, CMake does not auto-define the _EXPORTS symbol for
-# each sub-library. Add them as PUBLIC so both the lib and its consumers use
-# dllexport rather than dllimport, avoiding __imp_ linker errors.
-if(NOT BUILD_SHARED_LIBS)
-  foreach(_pinotgt pinocchio_default pinocchio_parsers pinocchio_visualizers
-                   pinocchio_extra pinocchio_collision)
-    if(TARGET ${_pinotgt})
-      string(REPLACE "pinocchio_" "" _suffix "${_pinotgt}")
-      if(_suffix STREQUAL "default")
-        set(_sym pinocchio_EXPORTS)
-      else()
-        set(_sym "${_pinotgt}_EXPORTS")
-      endif()
-      target_compile_definitions(${_pinotgt} PUBLIC ${_sym})
-    endif()
-  endforeach()
-  if(TARGET pinocchio)
-    target_compile_definitions(pinocchio INTERFACE
-      pinocchio_EXPORTS
-      pinocchio_parsers_EXPORTS
-      pinocchio_visualizers_EXPORTS)
-  endif()
-endif()
 
 # MSVC treats C4716 ("must return a value") as an error even when __assume(0)
 # marks code as unreachable — suppress it for the pinocchio library only.
@@ -118,4 +100,31 @@ target_link_libraries(${PROJECT_NAME} PRIVATE pinocchio)
 # /Zc:__cplusplus makes MSVC report the real __cplusplus value so pinocchio's
 # PINOCCHIO_DEPRECATED_MESSAGE macro expands to [[deprecated(...)]] not __declspec.
 target_compile_options(${PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Zc:__cplusplus>)
-target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0A00)
+
+# ---------------------------------------------------------------
+# DLL staging — copy runtime DLLs next to the executable.
+# Boost and most vcpkg deps are static (x64-windows-static-md).
+# Pinocchio is built shared (two DLLs from this build).
+# urdfdom cannot be built static in vcpkg regardless of triplet,
+# so its four DLLs must also be shipped.
+# ---------------------------------------------------------------
+set(PINOCCHIO_RUNTIME_DLLS
+    # pinocchio — built as shared libs in this tree
+    $<TARGET_FILE:pinocchio_default>
+    $<TARGET_FILE:pinocchio_parsers>
+    # urdfdom — always dynamic from vcpkg; target names handle debug/release paths
+    $<TARGET_FILE:urdfdom::urdfdom_model>
+    $<TARGET_FILE:urdfdom::urdfdom_model_state>
+    $<TARGET_FILE:urdfdom::urdfdom_world>
+    $<TARGET_FILE:urdfdom::urdfdom_sensor>
+)
+
+if(WIN32)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy -t
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+            ${PINOCCHIO_RUNTIME_DLLS}
+        COMMAND_EXPAND_LISTS
+        COMMENT "Staging pinocchio DLLs next to executable"
+    )
+endif()
